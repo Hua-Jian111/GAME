@@ -1,0 +1,270 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>贪吃蛇</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    overflow: hidden;
+  }
+  .container {
+    text-align: center;
+    background: #1a1a2e;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 0 40px rgba(100, 100, 255, 0.15);
+  }
+  h1 {
+    color: #7fdb6a;
+    font-size: 28px;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  .score-board {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 12px;
+    color: #ccc;
+    font-size: 16px;
+  }
+  .score-board span { color: #7fdb6a; font-weight: bold; font-size: 20px; }
+  canvas {
+    border: 2px solid #333;
+    border-radius: 8px;
+    background: #111;
+    display: block;
+    margin: 0 auto;
+  }
+  .controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  button {
+    background: #7fdb6a;
+    color: #111;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  button:hover { background: #6ac75a; }
+  button:active { transform: scale(0.96); }
+  button.secondary {
+    background: #333;
+    color: #ccc;
+  }
+  button.secondary:hover { background: #444; }
+  .tip {
+    color: #666;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🐍 贪吃蛇</h1>
+  <div class="score-board">
+    <div>得分: <span id="score">0</span></div>
+    <div>最高: <span id="best">0</span></div>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div class="controls">
+    <button id="btnPlay" onclick="startGame()">🎮 开始游戏</button>
+    <button class="secondary" onclick="toggleSpeed()">⚡ 速度: <span id="speedLabel">普通</span></button>
+  </div>
+  <div class="tip">方向键 / WASD 控制移动 | 空格键 暂停</div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const GRID = 20;
+const COLS = 25;
+const ROWS = 25;
+canvas.width = COLS * GRID;
+canvas.height = ROWS * GRID;
+
+let snake, food, direction, nextDirection, score, best, gameLoop, running, paused;
+let speedLevel = 0;
+const speeds = [100, 75, 50];
+
+function init() {
+  best = parseInt(localStorage.getItem('snakeBest') || '0');
+  document.getElementById('best').textContent = best;
+  resetGame();
+  draw();
+}
+function resetGame() {
+  const midX = Math.floor(COLS / 2);
+  const midY = Math.floor(ROWS / 2);
+  snake = [
+    { x: midX, y: midY },
+    { x: midX - 1, y: midY },
+    { x: midX - 2, y: midY },
+  ];
+  direction = { x: 1, y: 0 };
+  nextDirection = { x: 1, y: 0 };
+  score = 0;
+  running = false;
+  paused = false;
+  updateScore();
+  spawnFood();
+}
+function spawnFood() {
+  const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
+  const candidates = [];
+  for (let x = 0; x < COLS; x++)
+    for (let y = 0; y < ROWS; y++)
+      if (!occupied.has(`${x},${y}`))
+        candidates.push({ x, y });
+  food = candidates[Math.floor(Math.random() * candidates.length)];
+}
+function startGame() {
+  if (running && !paused) {
+    resetGame();
+  }
+  running = true;
+  paused = false;
+  document.getElementById('btnPlay').textContent = '🔄 重新开始';
+  if (gameLoop) clearInterval(gameLoop);
+  gameLoop = setInterval(tick, speeds[speedLevel]);
+  draw();
+}
+function toggleSpeed() {
+  speedLevel = (speedLevel + 1) % speeds.length;
+  const labels = ['慢速', '普通', '快速'];
+  document.getElementById('speedLabel').textContent = labels[speedLevel];
+  if (running && !paused) {
+    clearInterval(gameLoop);
+    gameLoop = setInterval(tick, speeds[speedLevel]);
+  }
+}
+function tick() {
+  if (paused) return;
+  direction = { ...nextDirection };
+  const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) return gameOver();
+  if (snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score += 10;
+    if (score > best) { best = score; localStorage.setItem('snakeBest', best); }
+    updateScore();
+    spawnFood();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+function gameOver() {
+  running = false;
+  clearInterval(gameLoop);
+  gameLoop = null;
+  draw();
+  document.getElementById('btnPlay').textContent = '🎮 再来一局';
+}
+function updateScore() {
+  document.getElementById('score').textContent = score;
+  document.getElementById('best').textContent = best;
+}
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < snake.length; i++) {
+    const s = snake[i];
+    const alpha = 1 - (i / (snake.length + 10)) * 0.5;
+    ctx.fillStyle = i === 0
+      ? '#7fdb6a'
+      : `rgba(100, 200, 80, ${alpha})`;
+    ctx.fillRect(s.x * GRID + 1, s.y * GRID + 1, GRID - 2, GRID - 2);
+    if (i === 0) {
+      ctx.fillStyle = '#fff';
+      const ex = direction.x === 1 ? 5 : direction.x === -1 ? -5 : 0;
+      const ey = direction.y === 1 ? 5 : direction.y === -1 ? -5 : 0;
+      ctx.beginPath();
+      ctx.arc(s.x * GRID + GRID / 2 + ex * 0.4, s.y * GRID + GRID / 2 + ey * 0.4, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(s.x * GRID + GRID / 2 + ex * 0.4, s.y * GRID + GRID / 2 + ey * 0.4, 1, 0, Math.PI * 2);
+      ctx.fillStyle = '#111';
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = '#ff5555';
+  ctx.beginPath();
+  const fx = food.x * GRID + GRID / 2;
+  const fy = food.y * GRID + GRID / 2;
+  ctx.arc(fx, fy, GRID / 2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+  if (!running && snake.length > 3) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ff6666';
+    ctx.font = 'bold 28px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('游戏结束', canvas.width / 2, canvas.height / 2 - 10);
+    ctx.fillStyle = '#ccc';
+    ctx.font = '16px "Microsoft YaHei", sans-serif';
+    ctx.fillText('点击"再来一局"继续', canvas.width / 2, canvas.height / 2 + 24);
+  } else if (!running) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#7fdb6a';
+    ctx.font = 'bold 22px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('点击开始游戏', canvas.width / 2, canvas.height / 2);
+  }
+  if (paused && running) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = 'bold 24px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂停中', canvas.width / 2, canvas.height / 2);
+  }
+}
+document.addEventListener('keydown', e => {
+  if (!running || paused) return;
+  const keyMap = {
+    ArrowUp:    { x: 0, y: -1 },
+    ArrowDown:  { x: 0, y: 1 },
+    ArrowLeft:  { x: -1, y: 0 },
+    ArrowRight: { x: 1, y: 0 },
+    w: { x: 0, y: -1 },
+    s: { x: 0, y: 1 },
+    a: { x: -1, y: 0 },
+    d: { x: 1, y: 0 },
+  };
+  const dir = keyMap[e.key];
+  if (!dir) return;
+  if (dir.x + direction.x === 0 && dir.y + direction.y === 0) return;
+  nextDirection = dir;
+  e.preventDefault();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' && running) {
+    paused = !paused;
+    draw();
+    e.preventDefault();
+  }
+});
+init();
+</script>
+</body>
+</html>
